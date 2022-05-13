@@ -1,5 +1,3 @@
-#if GOOGLE_CUDA
-
 #include "ew_op_gpu.h"
 #include "gpu_hmma.h"
 #include <stdio.h>
@@ -1373,10 +1371,6 @@ bool hGemmTN(CUstream stream, const ehalf* A, const ehalf* B, float* C, uint M, 
 
     return true;
 }
-
-#endif // GOOGLE_CUDA
-
-
 
                 // if (OP_B == OP_N)
                 // printf("%d %d %3d %08x %08x %08x %08x\n",
