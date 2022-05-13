@@ -35,12 +35,24 @@ static void ClosestDivisorTo4(uint val, bool isA, uint* div, uint* res) {
   }
 }
 
+// From what I can tell, only ehalf is implemented.
+cudaError_t hgemm_blocksparse_nx_dsd(const ehalf* X,
+                                     const ehalf* W,
+                                     ehalf* Y,
+                                     bsmm_params* params,
+                                     uint op);
+cudaError_t hgemm_blocksparse_nx_dsd(const bhalf* X,
+                                     const bhalf* W,
+                                     bhalf* Y,
+                                     bsmm_params* params,
+                                     uint op);
 cudaError_t hgemm_blocksparse_nx_dsd(const float* X,
                                      const float* W,
                                      float* Y,
                                      bsmm_params* params,
                                      uint op);
 
+// See matmul.py.
 template <typename in_value_t, typename out_value_t, typename idx_t>
 torch::Tensor openai_blocked_spmm(const torch::Tensor& input,
                                   const torch::Tensor& weight,
@@ -53,9 +65,19 @@ torch::Tensor openai_blocked_spmm(const torch::Tensor& input,
     error::throw_if_exception(major_ < 7, "Tensorcore GPU required");
   }
 
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
   bsmm_params params;
+  params.stream = stream;
   params.Lock = nullptr;
 
+  // Notes from python:
+  //     def i_shape(self, N): return (N, self.C) if self.axis else (self.C, N)
+  // def o_shape(self, N): return (N, self.K) if self.axis else (self.K, N)
+  // self.C  = CB * block_size
+  // self.K  = KB * block_size
+
+  // My notes:
   // input == X == A
   // weight == W == B
   // output == Y == C
@@ -81,12 +103,12 @@ torch::Tensor openai_blocked_spmm(const torch::Tensor& input,
 
   params.bsize = 32;
   params.beta = 1.0f;
-  params.pcount = 0;  // ???
-	params.shared = 0; // ???
-	params.Lut = nullptr; // ??? Look up table to access sparse matrix?
-	params.Lock = 0; // ???
-	params.segments = 0; // ??? Number of blocks?
-	params.Gate = 0; // ??? Works fine if you set to 0.
+  params.pcount = 0;     // ???
+  params.shared = 0;     // ???
+  params.Lut = nullptr;  // ??? Look up table to access sparse matrix?
+  params.Lock = 0;       // ???
+  params.segments = 0;   // ??? Number of blocks?
+  params.Gate = 0;       // ??? Works fine if you set to 0.
 
   auto options = torch::TensorOptions().device(torch::kCUDA);
   torch::Tensor output = torch::empty({N, M}, options);
@@ -112,5 +134,5 @@ torch::Tensor openai_blocked_spmm(const torch::Tensor& input,
   cudaError_t res = hgemm_blocksparse_nx_dsd(pA, pB, pC, &params, OP_N);
   error::throw_if_exception(res);
 
-	return output;
+  return output;
 }
